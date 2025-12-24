@@ -2,6 +2,8 @@
 git+https://github.com/KurimuzonAkuma/pyrogram
 py-tgcalls==0.9.7
 tgcrypto==1.2.5
+flask
+# ...baaki purani requirements same rahengi
 
 # --- DOWNLOADER (Latest for Cookies & Speed) ---
 git+https://github.com/yt-dlp/yt-dlp
