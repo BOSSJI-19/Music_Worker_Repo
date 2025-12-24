@@ -1,5 +1,7 @@
 import asyncio
 import os
+from threading import Thread
+from flask import Flask  # <--- NEW
 from pyrogram import Client, idle
 from pytgcalls import PyTgCalls
 from pytgcalls.types import InputAudioStream
@@ -8,13 +10,29 @@ from pymongo import MongoClient
 from config import API_ID, API_HASH, SESSION, MONGO_URL, LOGGER_ID
 from youtube import download_song
 
+# --- FLASK SETUP (FOR 24/7 UPTIME) 🟢 ---
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "🎵 Music Worker is Alive & Running!"
+
+def run_web():
+    # Port Render/Server se uthayega ya default 8080 lega
+    port = int(os.environ.get("PORT", 8080))
+    web_app.run(host="0.0.0.0", port=port)
+
+def keep_alive():
+    t = Thread(target=run_web)
+    t.start()
+
 # --- CLIENT SETUP ---
 app = Client(
     "MusicWorker",
     api_id=API_ID,
     api_hash=API_HASH,
     session_string=SESSION,
-    plugins=dict(root="plugins") # Plugins folder load karega
+    plugins=dict(root="plugins")
 )
 call_py = PyTgCalls(app)
 
@@ -23,7 +41,7 @@ mongo = MongoClient(MONGO_URL)
 db = mongo["Music_Database"]
 queue_col = db["Music_Queue"]
 
-# --- STARTUP MESSAGE (UPDATED) 🌟 ---
+# --- STARTUP MESSAGE ---
 async def send_startup_log():
     try:
         me = await app.get_me()
@@ -41,6 +59,7 @@ async def send_startup_log():
 <b>👤 Assistant:</b> {me.mention}
 <b>🆔 ID:</b> <code>{me.id}</code>
 <b>🍪 Cookies:</b> {cookie_status}
+<b>🌐 Web Server:</b> <code>Online 🟢</code>
 <b>⚙️ PyTgCalls:</b> <code>v0.9.7</code>
 
 <i>🚀 Ready to Search, Download & Play!</i>
@@ -55,7 +74,7 @@ async def process_task(task):
     chat_id = task["chat_id"]
     link = task["link"]
     query = task["song"]
-    requester = task.get("requester", "Unknown") # User ka naam bhi dikhayenge
+    requester = task.get("requester", "Unknown")
 
     # 1. JOIN CHECK
     try:
@@ -83,28 +102,19 @@ async def process_task(task):
 
     # 4. PLAY (LEGACY STYLE v0.9.7)
     try:
-        # Join Group Call
         await call_py.join_group_call(
             int(chat_id),
-            InputAudioStream(
-                file_path,
-            )
+            InputAudioStream(file_path)
         )
         
-        # Update DB
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "playing"}})
-        
-        # Log Success
         await app.send_message(LOGGER_ID, f"▶️ **Playing:** {title}\n👤 **Req:** {requester}")
         
     except Exception as e:
-        # Agar Already Joined hai toh Stream Change karo
         try:
             await call_py.change_stream(
                 int(chat_id),
-                InputAudioStream(
-                    file_path,
-                )
+                InputAudioStream(file_path)
             )
             queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "playing"}})
             await app.send_message(LOGGER_ID, f"▶️ **Track Changed:** {title}")
@@ -116,7 +126,6 @@ async def process_task(task):
 async def music_monitor():
     print("👀 Legacy Monitor Started...")
     while True:
-        # Pending tasks dhundo
         task = queue_col.find_one_and_update(
             {"status": "pending"},
             {"$set": {"status": "processing"}}
@@ -143,4 +152,8 @@ async def main():
     await idle()
 
 if __name__ == "__main__":
+    # 🔥 Flask Server Start (Background Thread)
+    keep_alive()
+    # 🔥 Bot Start
     app.run(main())
+    
