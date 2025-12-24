@@ -6,9 +6,8 @@ from pyrogram import Client, idle
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pytgcalls import PyTgCalls
 
-# ✅ LEGACY IMPORTS (py-tgcalls 0.9.7)
+# ✅ LEGACY IMPORT
 from pytgcalls.types.input_stream import InputStream
-from pytgcalls.types.input_stream.quality import HighQualityAudio
 
 from pymongo import MongoClient
 from config import API_ID, API_HASH, SESSION, MONGO_URL, LOGGER_ID, SUPPORT_GC
@@ -87,12 +86,11 @@ async def process_task(task):
 
     print(f"🎧 Task received for chat: {chat_id}")
 
-    # 1️⃣ JOIN GROUP (NOT VC)
+    # 1️⃣ JOIN GROUP
     try:
         await app.get_chat_member(chat_id, "me")
     except:
         try:
-            print("➕ Joining group...")
             await app.join_chat(link)
             await asyncio.sleep(3)
         except Exception as e:
@@ -107,20 +105,18 @@ async def process_task(task):
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "failed"}})
         return
 
-    # 3️⃣ VC JOIN + PLAY (LEGACY SAFE)
+    # 3️⃣ VC JOIN + PLAY (LEGACY CORRECT)
     try:
         print("🎙 Trying to join VC...")
         await call_py.join_group_call(
             chat_id,
-            InputStream(file_path, HighQualityAudio())
+            InputStream(file_path)   # ✅ FIXED
         )
 
-        # ⏳ VERY IMPORTANT FOR LEGACY
-        await asyncio.sleep(4)
+        await asyncio.sleep(3)
 
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "playing"}})
 
-        # 🔔 GROUP MESSAGE
         await app.send_message(
             chat_id,
             f"""
@@ -132,7 +128,6 @@ async def process_task(task):
             reply_markup=music_buttons()
         )
 
-        # 🧾 LOGGER MESSAGE
         await app.send_message(
             LOGGER_ID,
             f"▶️ Playing in <code>{chat_id}</code>\n🎧 {title}\n👤 {requester}"
