@@ -1,0 +1,17 @@
+# --- LEGACY CORE ---
+git+https://github.com/KurimuzonAkuma/pyrogram
+py-tgcalls==0.9.7
+tgcrypto==1.2.5
+
+# --- DOWNLOADER (Latest for Cookies & Speed) ---
+git+https://github.com/yt-dlp/yt-dlp
+ffmpeg-python
+
+# --- DATABASE ---
+pymongo
+dnspython
+
+# --- SEARCH & UTILS (Jo tumne manga) ---
+youtube-search-python
+requests
+wget
