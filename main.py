@@ -1,11 +1,11 @@
 import asyncio
 import os
 from threading import Thread
-from flask import Flask  # <--- NEW
+from flask import Flask
 from pyrogram import Client, idle
 from pytgcalls import PyTgCalls
 from pytgcalls.types import InputAudioStream
-from pytgcalls.types import AudioQuality
+# from pytgcalls.types import AudioQuality  <-- ❌ YE LINE HATA DI (Error Fixed)
 from pymongo import MongoClient
 from config import API_ID, API_HASH, SESSION, MONGO_URL, LOGGER_ID
 from youtube import download_song
@@ -18,7 +18,6 @@ def home():
     return "🎵 Music Worker is Alive & Running!"
 
 def run_web():
-    # Port Render/Server se uthayega ya default 8080 lega
     port = int(os.environ.get("PORT", 8080))
     web_app.run(host="0.0.0.0", port=port)
 
@@ -46,13 +45,11 @@ async def send_startup_log():
     try:
         me = await app.get_me()
         
-        # Check Cookies File
         if os.path.exists("cookies.txt"):
             cookie_status = "✅ Found (Turbo Mode)"
         else:
             cookie_status = "❌ Missing (Normal Mode)"
 
-        # Stylish Message
         txt = f"""
 <b>🎹 Music Worker Online (Legacy)</b>
 
@@ -104,7 +101,7 @@ async def process_task(task):
     try:
         await call_py.join_group_call(
             int(chat_id),
-            InputAudioStream(file_path)
+            InputAudioStream(file_path) # Sirf file path kaafi hai
         )
         
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "playing"}})
@@ -112,6 +109,7 @@ async def process_task(task):
         
     except Exception as e:
         try:
+            # Agar already joined hai
             await call_py.change_stream(
                 int(chat_id),
                 InputAudioStream(file_path)
@@ -142,18 +140,13 @@ async def main():
     print("🔵 Starting PyTgCalls...")
     await call_py.start()
     
-    # Send Log
     await send_startup_log()
-    
-    # Monitor Start
     asyncio.create_task(music_monitor())
     
     print("🟢 Bot is Idle and Running!")
     await idle()
 
 if __name__ == "__main__":
-    # 🔥 Flask Server Start (Background Thread)
     keep_alive()
-    # 🔥 Bot Start
     app.run(main())
-    
+        
