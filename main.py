@@ -4,8 +4,11 @@ from threading import Thread
 from flask import Flask
 from pyrogram import Client, idle
 from pytgcalls import PyTgCalls
-from pytgcalls.types import InputAudioStream
-# AudioQuality hata diya hai purane version ke liye
+
+# ✅ LEGACY IMPORTS (py-tgcalls 0.9.7)
+from pytgcalls.types.input_stream import InputStream
+from pytgcalls.types.input_stream.quality import HighQualityAudio
+
 from pymongo import MongoClient
 from config import API_ID, API_HASH, SESSION, MONGO_URL, LOGGER_ID
 from youtube import download_song
@@ -44,11 +47,8 @@ queue_col = db["Music_Queue"]
 async def send_startup_log():
     try:
         me = await app.get_me()
-        
-        if os.path.exists("cookies.txt"):
-            cookie_status = "✅ Found (Turbo Mode)"
-        else:
-            cookie_status = "❌ Missing (Normal Mode)"
+
+        cookie_status = "✅ Found (Turbo Mode)" if os.path.exists("cookies.txt") else "❌ Missing (Normal Mode)"
 
         txt = f"""
 <b>🎹 Music Worker Online (Legacy)</b>
@@ -68,7 +68,7 @@ async def send_startup_log():
 
 # --- MUSIC LOGIC ---
 async def process_task(task):
-    chat_id = task["chat_id"]
+    chat_id = int(task["chat_id"])
     link = task["link"]
     query = task["song"]
     requester = task.get("requester", "Unknown")
@@ -89,7 +89,8 @@ async def process_task(task):
     # 2. LOGGING
     try:
         await app.send_message(LOGGER_ID, f"🔍 **Searching:** `{query}`")
-    except: pass
+    except:
+        pass
 
     # 3. DOWNLOAD
     file_path, title = await download_song(query, chat_id)
@@ -97,26 +98,31 @@ async def process_task(task):
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "failed"}})
         return
 
-    # 4. PLAY (LEGACY STYLE v0.9.7)
+    # 4. PLAY (LEGACY SAFE)
     try:
         await call_py.join_group_call(
-            int(chat_id),
-            InputAudioStream(file_path)
+            chat_id,
+            InputStream(file_path, HighQualityAudio())
         )
-        
+
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "playing"}})
-        await app.send_message(LOGGER_ID, f"▶️ **Playing:** {title}\n👤 **Req:** {requester}")
-        
+        await app.send_message(
+            LOGGER_ID,
+            f"▶️ **Playing:** {title}\n👤 **Req:** {requester}"
+        )
+
     except Exception as e:
         try:
             await call_py.change_stream(
-                int(chat_id),
-                InputAudioStream(file_path)
+                chat_id,
+                InputStream(file_path, HighQualityAudio())
             )
+
             queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "playing"}})
-            await app.send_message(LOGGER_ID, f"▶️ **Track Changed:** {title}")
-        except:
-            print(f"Play Error: {e}")
+            await app.send_message(LOGGER_ID, f"⏭ **Track Changed:** {title}")
+
+        except Exception as er:
+            print(f"❌ Play Error: {er}")
             queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "error"}})
 
 # --- LOOP ---
@@ -131,23 +137,21 @@ async def music_monitor():
             await process_task(task)
         await asyncio.sleep(3)
 
-# --- RUN (FIXED BLOCK) ---
+# --- RUN ---
 async def main():
     print("🔵 Starting Client...")
     await app.start()
-    
+
     print("🔵 Starting PyTgCalls...")
     await call_py.start()
-    
+
     await send_startup_log()
     asyncio.create_task(music_monitor())
-    
+
     print("🟢 Bot is Idle and Running!")
     await idle()
 
 if __name__ == "__main__":
     keep_alive()
-    # ✅ Asyncio Loop fix for Legacy Pyrogram
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
-    
