@@ -2,7 +2,7 @@ import asyncio
 import os
 from pyrogram import Client, idle
 from pytgcalls import PyTgCalls
-from pytgcalls.types import InputAudioStream  # <--- OLD SYNTAX
+from pytgcalls.types import InputAudioStream
 from pytgcalls.types import AudioQuality
 from pymongo import MongoClient
 from config import API_ID, API_HASH, SESSION, MONGO_URL, LOGGER_ID
@@ -23,19 +23,39 @@ mongo = MongoClient(MONGO_URL)
 db = mongo["Music_Database"]
 queue_col = db["Music_Queue"]
 
-# --- STARTUP MESSAGE ---
+# --- STARTUP MESSAGE (UPDATED) 🌟 ---
 async def send_startup_log():
     try:
         me = await app.get_me()
-        txt = f"🎵 **Legacy Music System Active**\n🤖 Assistant: {me.mention}\n⚙️ Version: 0.9.7"
+        
+        # Check Cookies File
+        if os.path.exists("cookies.txt"):
+            cookie_status = "✅ Found (Turbo Mode)"
+        else:
+            cookie_status = "❌ Missing (Normal Mode)"
+
+        # Stylish Message
+        txt = f"""
+<b>🎹 Music Worker Online (Legacy)</b>
+
+<b>👤 Assistant:</b> {me.mention}
+<b>🆔 ID:</b> <code>{me.id}</code>
+<b>🍪 Cookies:</b> {cookie_status}
+<b>⚙️ PyTgCalls:</b> <code>v0.9.7</code>
+
+<i>🚀 Ready to Search, Download & Play!</i>
+"""
         await app.send_message(LOGGER_ID, txt)
-    except: pass
+        print("✅ Startup Log Sent!")
+    except Exception as e:
+        print(f"❌ Logger Error: {e}")
 
 # --- MUSIC LOGIC ---
 async def process_task(task):
     chat_id = task["chat_id"]
     link = task["link"]
     query = task["song"]
+    requester = task.get("requester", "Unknown") # User ka naam bhi dikhayenge
 
     # 1. JOIN CHECK
     try:
@@ -61,20 +81,24 @@ async def process_task(task):
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "failed"}})
         return
 
-    # 4. PLAY (LEGACY STYLE)
+    # 4. PLAY (LEGACY STYLE v0.9.7)
     try:
-        # 0.9.7 mein play() nahi hota, join_group_call() hota hai
+        # Join Group Call
         await call_py.join_group_call(
             int(chat_id),
             InputAudioStream(
                 file_path,
             )
         )
+        
+        # Update DB
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "playing"}})
-        await app.send_message(LOGGER_ID, f"▶️ **Playing:** {title}")
+        
+        # Log Success
+        await app.send_message(LOGGER_ID, f"▶️ **Playing:** {title}\n👤 **Req:** {requester}")
         
     except Exception as e:
-        # Agar already joined hai, toh stream change karo
+        # Agar Already Joined hai toh Stream Change karo
         try:
             await call_py.change_stream(
                 int(chat_id),
@@ -83,6 +107,7 @@ async def process_task(task):
                 )
             )
             queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "playing"}})
+            await app.send_message(LOGGER_ID, f"▶️ **Track Changed:** {title}")
         except:
             print(f"Play Error: {e}")
             queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "error"}})
@@ -102,12 +127,20 @@ async def music_monitor():
 
 # --- RUN ---
 async def main():
+    print("🔵 Starting Client...")
     await app.start()
+    
+    print("🔵 Starting PyTgCalls...")
     await call_py.start()
+    
+    # Send Log
     await send_startup_log()
+    
+    # Monitor Start
     asyncio.create_task(music_monitor())
+    
+    print("🟢 Bot is Idle and Running!")
     await idle()
 
 if __name__ == "__main__":
     app.run(main())
-  
