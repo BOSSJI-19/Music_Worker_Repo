@@ -5,7 +5,7 @@ from flask import Flask
 from pyrogram import Client, idle
 from pytgcalls import PyTgCalls
 from pytgcalls.types import InputAudioStream
-# from pytgcalls.types import AudioQuality  <-- ❌ YE LINE HATA DI (Error Fixed)
+# AudioQuality hata diya hai purane version ke liye
 from pymongo import MongoClient
 from config import API_ID, API_HASH, SESSION, MONGO_URL, LOGGER_ID
 from youtube import download_song
@@ -101,7 +101,7 @@ async def process_task(task):
     try:
         await call_py.join_group_call(
             int(chat_id),
-            InputAudioStream(file_path) # Sirf file path kaafi hai
+            InputAudioStream(file_path)
         )
         
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "playing"}})
@@ -109,7 +109,6 @@ async def process_task(task):
         
     except Exception as e:
         try:
-            # Agar already joined hai
             await call_py.change_stream(
                 int(chat_id),
                 InputAudioStream(file_path)
@@ -132,7 +131,7 @@ async def music_monitor():
             await process_task(task)
         await asyncio.sleep(3)
 
-# --- RUN ---
+# --- RUN (FIXED BLOCK) ---
 async def main():
     print("🔵 Starting Client...")
     await app.start()
@@ -148,5 +147,7 @@ async def main():
 
 if __name__ == "__main__":
     keep_alive()
-    app.run(main())
-        
+    # ✅ Asyncio Loop fix for Legacy Pyrogram
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
+    
