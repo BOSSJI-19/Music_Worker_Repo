@@ -85,29 +85,38 @@ async def process_task(task):
     query = task["song"]
     requester = task.get("requester", "Unknown")
 
-    # JOIN
+    print(f"🎧 Task received for chat: {chat_id}")
+
+    # 1️⃣ JOIN GROUP (NOT VC)
     try:
         await app.get_chat_member(chat_id, "me")
     except:
         try:
+            print("➕ Joining group...")
             await app.join_chat(link)
-            await asyncio.sleep(2)
-        except:
+            await asyncio.sleep(3)
+        except Exception as e:
+            print(f"❌ Group Join Error: {e}")
             queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "failed"}})
             return
 
-    # DOWNLOAD
+    # 2️⃣ DOWNLOAD
+    print("📥 Downloading song...")
     file_path, title = await download_song(query, chat_id)
     if not file_path:
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "failed"}})
         return
 
-    # PLAY
+    # 3️⃣ VC JOIN + PLAY (LEGACY SAFE)
     try:
+        print("🎙 Trying to join VC...")
         await call_py.join_group_call(
             chat_id,
             InputStream(file_path, HighQualityAudio())
         )
+
+        # ⏳ VERY IMPORTANT FOR LEGACY
+        await asyncio.sleep(4)
 
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "playing"}})
 
@@ -129,8 +138,10 @@ async def process_task(task):
             f"▶️ Playing in <code>{chat_id}</code>\n🎧 {title}\n👤 {requester}"
         )
 
+        print("✅ VC Joined & Song Playing")
+
     except Exception as e:
-        print(f"Play Error: {e}")
+        print(f"❌ VC Play Error: {e}")
         queue_col.update_one({"_id": task["_id"]}, {"$set": {"status": "error"}})
 
 # --- CALLBACK HANDLER ---
@@ -155,6 +166,7 @@ async def music_controls(_, query):
 
 # --- LOOP ---
 async def music_monitor():
+    print("👀 Legacy Monitor Started...")
     while True:
         task = queue_col.find_one_and_update(
             {"status": "pending"},
@@ -166,10 +178,16 @@ async def music_monitor():
 
 # --- RUN ---
 async def main():
+    print("🔵 Starting Client...")
     await app.start()
+
+    print("🔵 Starting PyTgCalls...")
     await call_py.start()
+
     await send_startup_log()
     asyncio.create_task(music_monitor())
+
+    print("🟢 Bot is Idle and Running!")
     await idle()
 
 if __name__ == "__main__":
