@@ -4,6 +4,7 @@ import os
 API_ID = int(os.getenv("API_ID", "123456"))
 API_HASH = os.getenv("API_HASH", "your_api_hash")
 SESSION = os.getenv("SESSION", "your_string_session")
+SUPPORT_GC = "https://t.me/YourSupportGroup"
 
 # Database (Wahi same URL jo Main Bot mein hai)
 MONGO_URL = os.getenv("MONGO_URL", "mongodb+srv://...")
